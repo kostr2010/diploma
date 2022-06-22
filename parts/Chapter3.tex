@@ -1,5 +1,107 @@
 \chapter{Исследование и построение решения задачи}
 \label{sec:Chapter3} \index{Chapter3}
+
 Здесь надо декомпозировать большую задачу из постановки на подзадачи и продолжать этот процесс, пока подзадачи не станут достаточно простыми, чтобы их можно было бы решить напрямую (например, поставив какой-то эксперимент или доказав теорему) или найти готовое решение.
+
+После анализа литературы и уже существующих решений стало ясно, как реализовывать каждую из поставленных ранее задач. Далее будет рассказано о том, какие методы были выбраны для выполнения этих задач. Порядок, в котором они были объявлены в главе \ref{sec:Chapter1} сохранен.
+
+\section{Признаки для датасета}
+
+Обсудим признаки, которые были выбраны для обучения классификатора. В предыдущей главе \ref{sec:Chapter2} было сказано, что из всех признаков, указанных в \cite{HECKMAN2011363}, данная работа сфокусируется лишь на первых двух - характеристики ошибки и характеристики кода, опуская последние три - метрики репозитория с исходным кодом, метрики базы данных с багами, метрики динамического анализа. Далее будет описано, почему был опущен каждый из перечисленных классов признаков.
+
+\subsection{Метрики репозитория с исходным кодом}
+Как было обозначено в обзоре литературы \ref{sec:Chapter2}, для того, чтобы хоть сколько нибудь эффективно анализировать историю коммитов проекта, она должна быть строго организована, иначе поиск нужных мест в коде сводится к полному анализу всего проекта на каждом из этапов его разработки. В той же главе было объяснено, что в открытом доступе очень малое число проектов соблюдает подобные правила. Плюс, даже при их соблюдении, множественный анализ проекта очень дорог вычислительно и по времени. Плюс, для того, чтобы размечать false positives, необходимо иметь доступ к уже собранной статистике использования анализатора, которой не существует в открытом доступе. Таким образом, анализ истории коммитов и других метрик репозитория отпадает.
+
+\subsection{Метрики базы данных с багами}
+Как и в предыдущем пункте, применение данных метрик ограничивается их отсутствием в открытом доступе.
+
+\subsection{Метрики динамического анализа}
+Для проведения динамического анализа требуется полная сборка всего проекта, что добавляет сложности к и без того затратному процессу анализа. Также, основным предметом изучения данной работы является именно статический анализ, поэтому рассмотрение метрик динамического анализа было решено оставить как предмет для будущих исследований.
+\\
+Теперь обсудим то, каким образом были представлены оставшиеся два класса признаков в данной работе.
+
+\subsection{Характеристики ошибки}
+\label{sec:Err-to-CWE} \index{Err-to-CWE}
+
+\subsection{Характеристики кода}
+
+\subsection{Token-based представление кода}
+\label{sec:Tokens} \index{Tokens}
+
+\section{Метод генерации и разметки датасета}
+
+\section{Сбор данных}
+
+\section{Обучение классификатора}
+
+\subsection{Decision tree}
+\subsection{Gradient boosting}
+
+Рассмотрим пример кода Juliet Test Suite:
+
+```
+\begin{verbatim}
+    void CWE415_Double_Free__malloc_free_char_08_bad()
+    {
+        char * data;
+        /* Initialize data */
+        data = NULL;
+        if(staticReturnsTrue())
+        {
+            data = (char *)malloc(100*sizeof(char));
+            if (data == NULL) {exit(-1);}
+            /* POTENTIAL FLAW: Free data in the source - the bad sink frees data as well */
+            free(data);
+        }
+        if(staticReturnsTrue())
+        {
+            /* POTENTIAL FLAW: Possibly freeing memory twice */
+            free(data);
+        }
+    }
+\end{verbatim}
+```
+
+
+The Juliet Test Suite contains two kinds of metadata that
+are relevant for determining the validity of alerts:
+a manifest file: This is an XML file that provides precise
+flaw information including line number, CWE, and
+filepath.
+function names: Documentation for the test suite says
+that if the function name includes the string GOOD then
+the particular CWE does not occur in it, but if it includes
+the string BAD then the CWE does occur in the function.
+We gathered information about filepath and line numbers
+covered by each function name that contains GOOD or
+BAD, as well as the CWE indicated (usually by filename).
+Note that both the manifest file and the function names
+provide only CWE-specific flaw information. In general, a line
+of code marked BAD for one code flaw type could be flawless
+with respect to all other code flaw types. Thus, we can use the
+metadata flaw information to determine the validity of an alert
+only when we can establish that the alert’s checkerID is for a
+flaw of the same type as a flaw referenced in the metadata. The
+test suite metadata does not identify every CWE weakness in
+the Juliet code nor all locations of the CWE weaknesses, so
+an alert that doesn’t map to the test suite metadata cannot be
+automatically labeled using the metadata. In other words, if
+an alert’s CWE doesn’t match the test suite metadata’s CWE,
+the metadata can’t be used to label the alert true or false.
+Publicly-available mappings between checkerIDs and
+CWEs are available for many of the FFSA tools that we tested.
+We fused alerts from this set of tools, producing a set of fused
+alerts with known CWE designations. We then determined
+verdicts (i.e. classifier ground truth labels) for each fused alert
+as follows:
+If the manifest includes a record of a flaw for the
+same filepath, line number, and CWE as the alert, then
+set verdict=True, indicating that the alert is a true
+positive.
+If the defect alert matches any line within a function
+name with GOOD and the alert’s CWE matches the CWE
+associated with the function, then set verdict=False,
+indicating a that the alert is a false positive.
+
 
 \newpage
