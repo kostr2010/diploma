@@ -40,7 +40,7 @@
     \caption{Шаги получения отфильтрованной последовательности токенов}
 \end{figure}
 
-После предварительной обработки, из получившейся последовательности токенов выбирается подпоследовательность фиксированной длины, такая, что токен, на который указывает сообщение об ошибке находится ровно посередине подпоследовательности. Получившаяся подпоследовательность фиксированной длины называется окном и контролируется гиперпараметром WINDOW\_SIZE, отвечающим за ширину этого окна. Соответственно, в датасете появляются признаки token[0], token[1], token[2], ... token[WINDOW\_SIZE - 1]. Предположение данной работы состоит в том, что последовательности отфильтрованных токенов наряду с метаданными о коде должно хватить для распознавания шаблонов false positive.
+После предварительной обработки, из получившейся последовательности токенов выбирается подпоследовательность фиксированной длины, такая, что токен, на который указывает сообщение об ошибке находится ровно посередине подпоследовательности. Получившаяся подпоследовательность фиксированной длины называется окном и контролируется гиперпараметром WINDOW\_SIZE, отвечающим за ширину этого окна. Соответственно, в датасете появляются признаки token[0], token[1], token[2], ... token[WINDOW\_SIZE - 1]. Предположение данной работы состоит в том, что последовательности отфильтрованных токенов наряду с метаданными о коде должно хватить для распознавания большинства шаблонов false positive, указанных в \cite{Reynolds}.
 \\
 \\
 Резюмируя, датасет, используемый для обучения моделей в данной работе, имеет следующий вид:
@@ -57,19 +57,11 @@
 \end{table}
 
 \section{Метод генерации и разметки датасета}
-
-
-
-\section{Сбор данных}
-
-\section{Обучение классификатора}
-
-\subsection{Decision tree}
-\subsection{Gradient boosting}
-
-Рассмотрим пример кода Juliet Test Suite:
+Для генерации и разметки датасета была выбрана кодовая база Juliet Test Suite\cite{Juliet}. Имеющиеся в коде метаданные позволяют без проблем классифицировать большинство сообщений анализатора как false positive или true positive. Рассмотрим пример кода Juliet Test Suite:
 
 \begin{verbatim}
+    // CWE415_Double_Free__malloc_free_char_08.c
+    ...
     void CWE415_Double_Free__malloc_free_char_08_bad()
     {
         char * data;
@@ -88,47 +80,39 @@
             free(data);
         }
     }
+    ...
+
+    // manifest.xml
+    ...
+    <testcase>
+      <file path="CWE415_Double_Free__malloc_free_char_08.c">
+        <flaw line="47" name="CWE-415: Double Free"/>
+      </file>
+    </testcase>
+    ...
 \end{verbatim}
 
-The Juliet Test Suite contains two kinds of metadata that
-are relevant for determining the validity of alerts:
-a manifest file: This is an XML file that provides precise
-flaw information including line number, CWE, and
-filepath.
-function names: Documentation for the test suite says
-that if the function name includes the string GOOD then
-the particular CWE does not occur in it, but if it includes
-the string BAD then the CWE does occur in the function.
-We gathered information about filepath and line numbers
-covered by each function name that contains GOOD or
-BAD, as well as the CWE indicated (usually by filename).
-Note that both the manifest file and the function names
-provide only CWE-specific flaw information. In general, a line
-of code marked BAD for one code flaw type could be flawless
-with respect to all other code flaw types. Thus, we can use the
-metadata flaw information to determine the validity of an alert
-only when we can establish that the alert’s checkerID is for a
-flaw of the same type as a flaw referenced in the metadata. The
-test suite metadata does not identify every CWE weakness in
-the Juliet code nor all locations of the CWE weaknesses, so
-an alert that doesn’t map to the test suite metadata cannot be
-automatically labeled using the metadata. In other words, if
-an alert’s CWE doesn’t match the test suite metadata’s CWE,
-the metadata can’t be used to label the alert true or false.
-Publicly-available mappings between checkerIDs and
-CWEs are available for many of the FFSA tools that we tested.
-We fused alerts from this set of tools, producing a set of fused
-alerts with known CWE designations. We then determined
-verdicts (i.e. classifier ground truth labels) for each fused alert
-as follows:
-If the manifest includes a record of a flaw for the
-same filepath, line number, and CWE as the alert, then
-set verdict=True, indicating that the alert is a true
-positive.
-If the defect alert matches any line within a function
-name with GOOD and the alert’s CWE matches the CWE
-associated with the function, then set verdict=False,
-indicating a that the alert is a false positive.
+Juliet Test Suite содержит два типа метаданных, которые полезны при оценке верности предупреждений анализатора:
+\begin{enumerate}
+    \item manifest.xml - этот файл содержит точную информацию о каждой ошибке, включая номер строки, файл и тип ошибки.
+    \item Названия функций - в документации к тестовой сюите говорится, что если название функции содержит строку 'GOOD', то указанный тип CWE в данной функции не встречается, а если название функции содержит строку 'BAD', то данный CWE в этой функции присутствует.
+\end{enumerate}
+
+Для разметки датасета были собраны следующие данные: для каждого файла, в котором анализаторы находили уязвимости были собраны метрики кода, а также token-based представление для каждой из функций. Далее стоит учитывать, что Juliet Test Suite указывает только на наличие или отсутствие конкретного CWE, указанного в названии файла, тоесть мы не можем выносить суждение о других типах уязвимостей, о которых сообщил анализатор в данном файле. Иными словами, если уязвимость, найденная анализатором не совпадает с CWE, указанным в manifest.xml или названии файла, то метаданные не могут быть использованы для того, чтобы пометить данное сообщение анализатора как true positive / false positive. Таким образом, после того, как вся тестовая сюита была проанализирована несколькими анализаторами, их сообщения об уязвимостях были слиты в единую базу данных, где каждый код ошибки был предварительно заменен на эквивалентный CWE либо при помощи встроенных в анализатор средств, либо при помощи уже заранее составленных таблиц соответствия. Далее, для каждого сообщения об ошибке была получена метка класса. Разметка происходила следующим образом:
+
+\begin{enumerate}
+    \item Если информация об уязвимости в manifest.xml (путь, строка, тип) совпадает с той, которую сообщил анализатор, то ставилась метка true positive
+    \item Если уязвимость обнаружена в строках, принадлежащих функции с именем 'GOOD', и код ошибки совпадает с CWE, указанным в имени файла, то ставилась метка false positive.
+\end{enumerate}
+
+Для остальных случаев невозможно точно определить метку. Однако существуют спекулятивные методы, которые являются предметом для дальнейших исследований и не были рассмотрены в данной работе. Их применение позволит расширить кодовую базу, на которой обучается классификатор, что увеличит качество и количество распознаваемых шаблонов false positive.
+
+\section{Обучение классификатора}
+
+
+
+\subsection{Decision tree}
+\subsection{Gradient boosting}
 
 
 \newpage
